@@ -42,7 +42,7 @@ tailwind.config = {
     <div class="flex items-center gap-6" id="walletControl">
       <button id="connectBtn" onclick="connect()" class="px-6 py-3 bg-gradient-to-r from-neon-cyan to-cyan-600 rounded-2xl font-bold shadow-neon hover:scale-105 transition">Connect Wallet</button>
       <button id="disconnectBtn" onclick="disconnect()" class="px-6 py-3 bg-red-500 rounded-2xl font-bold shadow-neon hover:scale-105 transition hidden">Disconnect</button>
-      <div id="walletStatus" class="text-lg font-medium text-neon-cyan">Not connected</div>
+      <div id="walletStatus" class="text-sm font-medium text-neon-cyan max-w-[150px] truncate">Not connected</div>
     </div>
   </div>
 
@@ -54,11 +54,10 @@ tailwind.config = {
       <div class="bg-dark-card backdrop-blur-xl border border-dark-border/50 rounded-3xl p-6 shadow-glass text-center">
         <img id="profileImage" src="https://via.placeholder.com/120" alt="Avatar" class="w-32 h-32 rounded-full mx-auto mb-4 border-4 border-neon-cyan/40 shadow-neon"/>
         <input id="profileName" placeholder="Creator Name" class="w-full p-3 mb-3 bg-gray-900 border border-dark-border rounded-xl text-white focus:outline-none focus:border-neon-cyan focus:ring-1 focus:ring-neon-cyan"/>
-        <input id="profileAvatar" type="file" accept="image/*" class="w-full mb-2"/>
-        <input id="profileAvatarURL" placeholder="or Avatar URL" class="w-full p-3 mb-4 bg-gray-900 border border-dark-border rounded-xl text-white focus:outline-none focus:border-neon-cyan focus:ring-1 focus:ring-neon-cyan"/>
+        <input id="profileAvatar" type="file" accept="image/*" class="w-full mb-4"/>
         <button onclick="saveProfile()" class="w-full py-3 bg-gradient-to-r from-neon-cyan to-cyan-600 rounded-2xl font-bold shadow-neon hover:scale-105 transition">Create / Update Profile</button>
         <h2 id="profileNameDisplay" class="text-2xl font-bold text-neon-cyan mb-1 mt-4">Your Profile</h2>
-        <p id="profileBioDisplay" class="text-gray-400 mb-4">Connect wallet to load profile</p>
+        <p id="profileBioDisplay" class="text-gray-400 mb-4 truncate max-w-full">Connect wallet to load profile</p>
       </div>
     </div>
 
@@ -92,7 +91,7 @@ tailwind.config = {
       </select>
       <input id="creatorWalletInput" placeholder="Or enter wallet address (0x...)" class="w-full p-4 bg-gray-900 border border-dark-border rounded-2xl text-white focus:outline-none focus:border-neon-cyan focus:ring-1 focus:ring-neon-cyan"/>
     </div>
-    <div class="mb-2 text-sm text-gray-400">Minimum tip: <span id="minTipDisplay">0.01</span> USDC</div>
+    <div class="mb-2 text-sm text-gray-400">Minimum tip: <span id="minTipDisplay">0.00</span> USDC</div>
     <input id="amount" type="number" step="0.01" placeholder="Amount in USDC" class="w-full p-4 mb-4 bg-gray-900 border border-dark-border rounded-2xl text-white focus:outline-none focus:border-neon-cyan focus:ring-1 focus:ring-neon-cyan"/>
     <button onclick="sendTip()" class="w-full py-4 bg-gradient-to-r from-neon-cyan to-cyan-600 rounded-2xl font-bold text-xl shadow-neon hover:scale-105 transition">Send Tip</button>
     <div id="status" class="mt-4 text-center text-yellow-400 font-medium">Idle</div>
@@ -113,7 +112,8 @@ const ABI = [
   "function tip(address creator,uint256 amount,string calldata message) external",
   "function claimEarnings() external",
   "function getCreatorStats(address creator) view returns (string memory,string memory,bool,uint256,uint256)",
-  "function registerAsCreator(string calldata name,string calldata avatarURL) external"
+  "function registerAsCreator(string calldata name,string calldata avatarURL) external",
+  "function minimumTipAmount() view returns(uint256)"
 ];
 
 let provider, signer, contract, walletAddress;
@@ -137,6 +137,7 @@ async function connect(){
   document.getElementById("disconnectBtn").classList.remove("hidden");
   loadProfile();
   loadCreatorsDropdown();
+  fetchMinTip();
   loadTotalEarned();
 }
 
@@ -148,32 +149,37 @@ function disconnect(){
   document.getElementById("disconnectBtn").classList.add("hidden");
 }
 
+async function fetchMinTip(){
+  try{
+    const minTip = await contract.minimumTipAmount();
+    document.getElementById("minTipDisplay").innerText = (minTip/1e6).toFixed(2);
+  }catch(e){console.log("Cannot fetch min tip",e);}
+}
+
 async function loadProfile(){
   if(!walletAddress) return;
   try{
-    const [name, avatarURL, isActive, lifetimeEarnings] = await contract.getCreatorStats(walletAddress);
+    const stats = await contract.getCreatorStats(walletAddress);
+    const [name, avatarURL] = stats;
     if(name!==""){
       document.getElementById("profileNameDisplay").innerText = name;
       document.getElementById("profileImage").src = avatarURL || "https://via.placeholder.com/120";
-      document.getElementById("profileBioDisplay").innerText = `Connected wallet: ${walletAddress}`;
+      document.getElementById("profileBioDisplay").innerText = `Connected: ${walletAddress}`;
       document.getElementById("profileName").value = name;
-      document.getElementById("profileAvatarURL").value = avatarURL || "";
     }
-  }catch(e){
-    console.log("Not registered yet");
-  }
+  }catch(e){ console.log("Profile not registered"); }
 }
 
 async function saveProfile(){
   const name = document.getElementById("profileName").value;
-  let avatarURL = document.getElementById("profileAvatarURL").value.trim();
   const fileInput = document.getElementById("profileAvatar");
+  let avatarURL = "https://via.placeholder.com/120";
   if(fileInput.files.length>0){
     avatarURL = URL.createObjectURL(fileInput.files[0]);
   }
   if(!name){alert("Enter a name"); return;}
   try{
-    const tx = await contract.registerAsCreator(name, avatarURL || "https://via.placeholder.com/120");
+    const tx = await contract.registerAsCreator(name, avatarURL);
     await tx.wait();
     alert("Profile registered on-chain!");
     loadProfile();
@@ -183,7 +189,6 @@ async function saveProfile(){
 
 async function loadCreatorsDropdown(){
   creators = [];
-  // For demo, use only connected wallet as registered; in real case, fetch from contract events
   if(walletAddress){
     creators.push({name:document.getElementById("profileName").value || "Unknown", wallet:walletAddress});
   }
@@ -217,7 +222,7 @@ async function sendTip(){
   if(!walletAddress){alert("Connect wallet first!"); return;}
   const selectedCreator = document.getElementById("creatorSelect").value;
   const walletInput = document.getElementById("creatorWalletInput").value.trim();
-  const amount = document.getElementById("amount").value;
+  const amount = parseFloat(document.getElementById("amount").value);
   const minTip = parseFloat(document.getElementById("minTipDisplay").innerText);
   if(!amount || amount<minTip || (!selectedCreator && !walletInput)){alert("Amount below minimum or recipient not set!"); return;}
   const recipient = selectedCreator || walletInput;
@@ -230,7 +235,6 @@ async function sendTip(){
   }catch(e){console.error(e); document.getElementById("status").innerText="Transaction failed!";}
 }
 
-// Load profile on page load if connected
 window.addEventListener("load",()=>{
   if(window.ethereum && window.ethereum.selectedAddress){
     connect();
