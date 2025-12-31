@@ -39,8 +39,9 @@ tailwind.config = {
   <!-- Header -->
   <div class="flex flex-col sm:flex-row justify-between items-center mb-12 gap-6">
     <h1 class="text-5xl md:text-6xl font-bold bg-gradient-to-r from-neon-cyan to-cyan-400 bg-clip-text text-transparent">Arc Tip Jar</h1>
-    <div class="flex items-center gap-6">
-      <button id="connectBtn" onclick="toggleConnection()" class="px-6 py-3 bg-gradient-to-r from-neon-cyan to-cyan-600 rounded-2xl font-bold shadow-neon hover:scale-105 transition">Connect Wallet</button>
+    <div class="flex items-center gap-6" id="walletControl">
+      <button id="connectBtn" onclick="connect()" class="px-6 py-3 bg-gradient-to-r from-neon-cyan to-cyan-600 rounded-2xl font-bold shadow-neon hover:scale-105 transition">Connect Wallet</button>
+      <button id="disconnectBtn" onclick="disconnect()" class="px-6 py-3 bg-red-500 rounded-2xl font-bold shadow-neon hover:scale-105 transition hidden">Disconnect</button>
       <div id="walletStatus" class="text-lg font-medium text-neon-cyan">Not connected</div>
     </div>
   </div>
@@ -53,8 +54,8 @@ tailwind.config = {
       <div class="bg-dark-card backdrop-blur-xl border border-dark-border/50 rounded-3xl p-6 shadow-glass text-center">
         <img id="profileImage" src="https://via.placeholder.com/120" alt="Avatar" class="w-32 h-32 rounded-full mx-auto mb-4 border-4 border-neon-cyan/40 shadow-neon"/>
         <input id="profileName" placeholder="Creator Name" class="w-full p-3 mb-3 bg-gray-900 border border-dark-border rounded-xl text-white focus:outline-none focus:border-neon-cyan focus:ring-1 focus:ring-neon-cyan"/>
-        <input id="profileAvatar" type="file" accept="image/*" class="w-full mb-4"/>
-        <input id="profileAvatarURL" type="text" placeholder="Or avatar image URL" class="w-full p-3 mb-4 bg-gray-900 border border-dark-border rounded-xl text-white focus:outline-none focus:border-neon-cyan focus:ring-1 focus:ring-neon-cyan"/>
+        <input id="profileAvatar" type="file" accept="image/*" class="w-full mb-2"/>
+        <input id="profileAvatarURL" placeholder="or Avatar URL" class="w-full p-3 mb-4 bg-gray-900 border border-dark-border rounded-xl text-white focus:outline-none focus:border-neon-cyan focus:ring-1 focus:ring-neon-cyan"/>
         <button onclick="saveProfile()" class="w-full py-3 bg-gradient-to-r from-neon-cyan to-cyan-600 rounded-2xl font-bold shadow-neon hover:scale-105 transition">Create / Update Profile</button>
         <h2 id="profileNameDisplay" class="text-2xl font-bold text-neon-cyan mb-1 mt-4">Your Profile</h2>
         <p id="profileBioDisplay" class="text-gray-400 mb-4">Connect wallet to load profile</p>
@@ -84,173 +85,152 @@ tailwind.config = {
 
   <!-- Tipping Form -->
   <div class="mt-10 bg-dark-card backdrop-blur-xl border border-dark-border/50 rounded-3xl p-6 shadow-glass max-w-3xl mx-auto">
-    <h2 class="text-3xl font-bold text-neon-cyan mb-2 text-center">Send a Tip</h2>
-    <p class="text-sm text-gray-400 mb-4">Minimum tip: <span id="minTipDisplay">0.01</span> USDC</p>
-    <div class="flex flex-col gap-4 mb-4">
+    <h2 class="text-3xl font-bold text-neon-cyan mb-6 text-center">Send a Tip</h2>
+    <div class="flex flex-col gap-4 mb-2">
       <select id="creatorSelect" class="w-full p-4 bg-gray-900 border border-dark-border rounded-2xl text-white focus:outline-none focus:border-neon-cyan focus:ring-1 focus:ring-neon-cyan">
         <option value="">Select Creator by Name</option>
       </select>
       <input id="creatorWalletInput" placeholder="Or enter wallet address (0x...)" class="w-full p-4 bg-gray-900 border border-dark-border rounded-2xl text-white focus:outline-none focus:border-neon-cyan focus:ring-1 focus:ring-neon-cyan"/>
     </div>
+    <div class="mb-2 text-sm text-gray-400">Minimum tip: <span id="minTipDisplay">0.01</span> USDC</div>
     <input id="amount" type="number" step="0.01" placeholder="Amount in USDC" class="w-full p-4 mb-4 bg-gray-900 border border-dark-border rounded-2xl text-white focus:outline-none focus:border-neon-cyan focus:ring-1 focus:ring-neon-cyan"/>
     <button onclick="sendTip()" class="w-full py-4 bg-gradient-to-r from-neon-cyan to-cyan-600 rounded-2xl font-bold text-xl shadow-neon hover:scale-105 transition">Send Tip</button>
     <div id="status" class="mt-4 text-center text-yellow-400 font-medium">Idle</div>
   </div>
 
+  <!-- Footer -->
+  <footer class="mt-12 text-center text-gray-400 text-sm">
+    <p>&copy; 2025 Arc Tip Jar • Contact: <a href="https://x.com/RidwanUsIba" class="text-neon-cyan">X</a></p>
+    <p>Powered by Arc Network</p>
+  </footer>
+
 </div>
 
-<!-- Footer -->
-<footer class="mt-16 p-6 bg-dark-card border-t border-dark-border/50 rounded-t-3xl text-center text-gray-400">
-  <p class="mb-2">© <span id="currentYear"></span> Arc Tip Jar</p>
-  <p>Follow me on <a href="https://x.com/RidwanUsIba" target="_blank" class="text-neon-cyan hover:underline">X</a></p>
-</footer>
-
 <script>
-document.getElementById("currentYear").innerText = new Date().getFullYear();
-
 const CONTRACT_ADDRESS = "0xa26E5D70180c87b36D98C21155c24709f64569E9";
 const USDC_ADDRESS = "0x3600000000000000000000000000000000000000";
-const MIN_TIP = 1; // USDC minimum tip in smallest unit (adjust to 6 decimals)
-document.getElementById("minTipDisplay").innerText = MIN_TIP;
-
 const ABI = [
-  "function tip(address creator, uint256 amount, string calldata message) external",
-  "function registerAsCreator(string calldata name, string calldata avatarURL) external",
+  "function tip(address creator,uint256 amount,string calldata message) external",
   "function claimEarnings() external",
-  "function getCreatorStats(address creator) view returns (string memory name,string memory avatarURL,bool isActive,uint256 lifetimeEarnings,uint256 withdrawable)"
+  "function getCreatorStats(address creator) view returns (string memory,string memory,bool,uint256,uint256)",
+  "function registerAsCreator(string calldata name,string calldata avatarURL) external"
 ];
 
-let provider;
-let signer;
-let userWallet;
+let provider, signer, contract, walletAddress;
 let creators = [];
 
-async function toggleConnection(){
-  if(window.ethereum && userWallet){
-    userWallet = null;
-    signer = null;
-    provider = null;
-    document.getElementById("walletStatus").innerText = "Not connected";
-    document.getElementById("connectBtn").innerText = "Connect Wallet";
-    loadProfileDisplay(null);
-  } else { await connect(); }
-}
+const ctx = document.getElementById('earningsChart').getContext('2d');
+const earningsChart = new Chart(ctx, {
+  type:'line',
+  data:{labels:['Jan','Feb','Mar','Apr','May','Jun'],datasets:[{label:'Earned',data:[0,0,0,0,0,0],borderColor:'#00f5ff',backgroundColor:'rgba(0,245,255,0.15)',tension:0.4,fill:true}]},
+  options:{responsive:true,scales:{y:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.08)'},ticks:{color:'#94a3b8'}},x:{grid:{display:false},ticks:{color:'#94a3b8'}}},plugins:{legend:{display:false}}}
+});
 
 async function connect(){
-  if(!window.ethereum){alert("MetaMask not installed!"); return;}
+  if(!window.ethereum){alert("MetaMask not installed"); return;}
   provider = new ethers.BrowserProvider(window.ethereum);
-  [userWallet] = await provider.send("eth_requestAccounts", []);
   signer = await provider.getSigner();
-  document.getElementById("walletStatus").innerText = userWallet;
-  document.getElementById("connectBtn").innerText = "Disconnect Wallet";
-  loadProfileDisplay(userWallet);
+  walletAddress = await signer.getAddress();
+  contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+  document.getElementById("walletStatus").innerText = walletAddress;
+  document.getElementById("connectBtn").classList.add("hidden");
+  document.getElementById("disconnectBtn").classList.remove("hidden");
+  loadProfile();
   loadCreatorsDropdown();
-  loadRecentTips();
-  updateEarnings();
+  loadTotalEarned();
 }
 
-async function loadProfileDisplay(wallet){
-  const profileNameDisplay = document.getElementById("profileNameDisplay");
-  const profileImage = document.getElementById("profileImage");
-  const profileBio = document.getElementById("profileBioDisplay");
-  if(!wallet){ profileNameDisplay.innerText="Your Profile"; profileImage.src="https://via.placeholder.com/120"; profileBio.innerText="Connect wallet to load profile"; return; }
-  const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+function disconnect(){
+  walletAddress = null;
+  contract = null;
+  document.getElementById("walletStatus").innerText = "Not connected";
+  document.getElementById("connectBtn").classList.remove("hidden");
+  document.getElementById("disconnectBtn").classList.add("hidden");
+}
+
+async function loadProfile(){
+  if(!walletAddress) return;
   try{
-    const stats = await contract.getCreatorStats(wallet);
-    profileNameDisplay.innerText = stats[0] || "New Creator";
-    profileImage.src = stats[1] || "https://via.placeholder.com/120";
-    profileBio.innerText = `Connected wallet: ${wallet}`;
+    const [name, avatarURL, isActive, lifetimeEarnings] = await contract.getCreatorStats(walletAddress);
+    if(name!==""){
+      document.getElementById("profileNameDisplay").innerText = name;
+      document.getElementById("profileImage").src = avatarURL || "https://via.placeholder.com/120";
+      document.getElementById("profileBioDisplay").innerText = `Connected wallet: ${walletAddress}`;
+      document.getElementById("profileName").value = name;
+      document.getElementById("profileAvatarURL").value = avatarURL || "";
+    }
   }catch(e){
-    console.error(e);
-    profileNameDisplay.innerText="New Creator";
-    profileImage.src="https://via.placeholder.com/120";
-    profileBio.innerText=`Connected wallet: ${wallet}`;
+    console.log("Not registered yet");
   }
 }
 
 async function saveProfile(){
-  if(!userWallet){alert("Connect wallet first!"); return;}
   const name = document.getElementById("profileName").value;
-  const avatarFile = document.getElementById("profileAvatar").files[0];
-  const avatarURLInput = document.getElementById("profileAvatarURL").value;
-  let avatarURL = avatarURLInput || "https://via.placeholder.com/120";
-  if(avatarFile){ avatarURL = URL.createObjectURL(avatarFile); }
-  const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+  let avatarURL = document.getElementById("profileAvatarURL").value.trim();
+  const fileInput = document.getElementById("profileAvatar");
+  if(fileInput.files.length>0){
+    avatarURL = URL.createObjectURL(fileInput.files[0]);
+  }
+  if(!name){alert("Enter a name"); return;}
   try{
-    const tx = await contract.registerAsCreator(name, avatarURL);
-    document.getElementById("status").innerText = "Registering profile...";
+    const tx = await contract.registerAsCreator(name, avatarURL || "https://via.placeholder.com/120");
     await tx.wait();
-    document.getElementById("status").innerText = "Profile registered!";
-    loadProfileDisplay(userWallet);
+    alert("Profile registered on-chain!");
+    loadProfile();
     loadCreatorsDropdown();
-  }catch(e){ console.error(e); document.getElementById("status").innerText="Transaction failed!";}
+  }catch(e){console.error(e); alert("Transaction failed!");}
 }
 
 async function loadCreatorsDropdown(){
-  if(!signer) return;
-  const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
   creators = [];
-  // For demo, we can just show the connected wallet and any other known addresses
-  creators.push({name:"Your Profile", wallet:userWallet});
+  // For demo, use only connected wallet as registered; in real case, fetch from contract events
+  if(walletAddress){
+    creators.push({name:document.getElementById("profileName").value || "Unknown", wallet:walletAddress});
+  }
   const select = document.getElementById("creatorSelect");
   select.innerHTML = '<option value="">Select Creator by Name</option>';
-  creators.forEach(c=>{const opt=document.createElement("option"); opt.value=c.wallet; opt.text=c.name; select.appendChild(opt);});
-}
-
-async function sendTip(){
-  if(!userWallet){alert("Connect wallet first!"); return;}
-  const selectedCreator = document.getElementById("creatorSelect").value;
-  const walletInput = document.getElementById("creatorWalletInput").value.trim();
-  const amount = document.getElementById("amount").value;
-  if(!amount || (!selectedCreator && !walletInput)){alert("Select creator or enter wallet!"); return;}
-  if(amount < MIN_TIP){alert(`Minimum tip is ${MIN_TIP} USDC`); return;}
-  const recipient = selectedCreator || walletInput;
-  const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
-  const tipAmount = ethers.parseUnits(amount, 6);
-  try{
-    const usdc = new ethers.Contract(USDC_ADDRESS, ["function approve(address spender, uint256 amount) external returns (bool)"], signer);
-    await usdc.approve(CONTRACT_ADDRESS, tipAmount);
-    const tx = await contract.tip(recipient, tipAmount, "Tip from web UI");
-    document.getElementById("status").innerText="Transaction sent...";
-    await tx.wait();
-    document.getElementById("status").innerText="Tip successful!";
-    updateEarnings();
-  }catch(err){console.error(err); document.getElementById("status").innerText="Transaction failed!";}
-}
-
-async function updateEarnings(){
-  if(!userWallet) return;
-  const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
-  try{
-    const stats = await contract.getCreatorStats(userWallet);
-    document.getElementById("totalEarned").innerText = (stats[4]/1e6).toFixed(2);
-    // For chart demo, can append new points or fetch real-time earnings
-  }catch(e){console.error(e);}
-}
-
-function loadRecentTips(){
-  const recent = document.getElementById("recentTips");
-  recent.innerHTML="";
-  // Mock tips: in a real implementation, fetch from backend or subgraph
-  const mockTips=[{amount:12,from:userWallet||"0xabc...123",message:"Great work!",time:"2h ago"}];
-  mockTips.forEach(tip=>{
-    const name = tip.from===userWallet ? document.getElementById("profileNameDisplay").innerText : tip.from;
-    const div=document.createElement("div");
-    div.className="flex justify-between items-center p-3 bg-gray-900/40 rounded-2xl border border-dark-border/30";
-    div.innerHTML=`<div><span class="text-neon-cyan font-bold">${tip.amount} USDC</span> from <span class="text-gray-400 text-sm">${name}</span></div><div class="text-gray-400 text-sm">${tip.time} • "${tip.message}"</div>`;
-    recent.appendChild(div);
+  creators.forEach(c=>{
+    const opt = document.createElement("option");
+    opt.value = c.wallet;
+    opt.text = c.name;
+    select.appendChild(opt);
   });
 }
 
-// Initialize chart with dummy data
-const ctx = document.getElementById('earningsChart').getContext('2d');
-new Chart(ctx,{
-  type:'line',
-  data:{labels:['Jan','Feb','Mar','Apr','May','Jun'],datasets:[{label:'Earned',data:[0,45,120,80,250,380],borderColor:'#00f5ff',backgroundColor:'rgba(0,245,255,0.15)',tension:0.4,fill:true}]},
-  options:{responsive:true,scales:{y:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.08)'},ticks:{color:'#94a3b8'}},x:{grid:{display:false},ticks:{color:'#94a3b8'}}},plugins:{legend:{display:false}}}
-});
+async function loadTotalEarned(){
+  if(!walletAddress) return;
+  try{
+    const stats = await contract.getCreatorStats(walletAddress);
+    document.getElementById("totalEarned").innerText = (stats[3]/1e6).toFixed(2);
+    updateChart(stats[3]/1e6);
+  }catch(e){console.log(e);}
+}
 
-// Load profile on page load
+function updateChart(value){
+  const data = earningsChart.data.datasets[0].data;
+  data.push(value);
+  if(data.length>6) data.shift();
+  earningsChart.update();
+}
+
+async function sendTip(){
+  if(!walletAddress){alert("Connect wallet first!"); return;}
+  const selectedCreator = document.getElementById("creatorSelect").value;
+  const walletInput = document.getElementById("creatorWalletInput").value.trim();
+  const amount = document.getElementById("amount").value;
+  const minTip = parseFloat(document.getElementById("minTipDisplay").innerText);
+  if(!amount || amount<minTip || (!selectedCreator && !walletInput)){alert("Amount below minimum or recipient not set!"); return;}
+  const recipient = selectedCreator || walletInput;
+  try{
+    const tx = await contract.tip(recipient, ethers.parseUnits(amount,6),"Tip from web UI");
+    document.getElementById("status").innerText="Transaction sent...";
+    await tx.wait();
+    document.getElementById("status").innerText="Tip successful!";
+    loadTotalEarned();
+  }catch(e){console.error(e); document.getElementById("status").innerText="Transaction failed!";}
+}
+
+// Load profile on page load if connected
 window.addEventListener("load",()=>{
   if(window.ethereum && window.ethereum.selectedAddress){
     connect();
