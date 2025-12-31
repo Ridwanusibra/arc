@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arc Tip Jar • Dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet"/>
+<style>
+body { font-family: 'Inter', sans-serif; background: #0a0a0f; color: #f1f5f9; }
+h1, h2 { font-family: 'Space Grotesk', sans-serif; }
+</style>
+<script>
+tailwind.config = {
+  darkMode: 'class',
+  theme: {
+    extend: {
+      colors: {
+        'neon-cyan': '#00f5ff',
+        'dark-bg': '#0a0a0f',
+        'dark-card': '#11111a',
+        'dark-border': '#1e1e2e',
+      },
+      boxShadow: {
+        'glass': '0 8px 32px rgba(0,0,0,0.37)',
+        'neon': '0 0 20px rgba(0,245,255,0.4)',
+      }
+    }
+  }
+}
+</script>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-dark-bg to-[#0f172a]">
+
+<div class="container mx-auto px-4 py-10 max-w-6xl">
+
+  <!-- Header -->
+  <div class="flex flex-col sm:flex-row justify-between items-center mb-12 gap-6">
+    <h1 class="text-5xl md:text-6xl font-bold bg-gradient-to-r from-neon-cyan to-cyan-400 bg-clip-text text-transparent">Arc Tip Jar</h1>
+    <div class="flex items-center gap-6">
+      <button onclick="connect()" class="px-6 py-3 bg-gradient-to-r from-neon-cyan to-cyan-600 rounded-2xl font-bold shadow-neon hover:scale-105 transition">Connect Wallet</button>
+      <div id="walletStatus" class="text-lg font-medium text-neon-cyan">Not connected</div>
+    </div>
+  </div>
+
+  <!-- Dashboard Grid -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+    <!-- Profile Card -->
+    <div class="lg:col-span-1">
+      <div class="bg-dark-card backdrop-blur-xl border border-dark-border/50 rounded-3xl p-6 shadow-glass text-center">
+        <img id="profileImage" src="https://via.placeholder.com/120" alt="Avatar" class="w-32 h-32 rounded-full mx-auto mb-4 border-4 border-neon-cyan/40 shadow-neon"/>
+        <input id="profileName" placeholder="Creator Name" class="w-full p-3 mb-3 bg-gray-900 border border-dark-border rounded-xl text-white focus:outline-none focus:border-neon-cyan focus:ring-1 focus:ring-neon-cyan"/>
+        <input id="profileAvatar" type="file" accept="image/*" class="w-full mb-4"/>
+        <button onclick="saveProfile()" class="w-full py-3 bg-gradient-to-r from-neon-cyan to-cyan-600 rounded-2xl font-bold shadow-neon hover:scale-105 transition">Create / Update Profile</button>
+        <h2 id="profileNameDisplay" class="text-2xl font-bold text-neon-cyan mb-1 mt-4">Your Profile</h2>
+        <p id="profileBioDisplay" class="text-gray-400 mb-4">Connect wallet to load profile</p>
+      </div>
+    </div>
+
+    <!-- Earnings Overview -->
+    <div class="lg:col-span-2 space-y-6">
+      <div class="bg-dark-card backdrop-blur-xl border border-dark-border/50 rounded-3xl p-6 shadow-glass">
+        <h3 class="text-xl text-gray-400 mb-1">Total Earned</h3>
+        <div class="text-5xl md:text-6xl font-bold text-neon-cyan mb-1">$<span id="totalEarned">0.00</span></div>
+        <p class="text-sm text-gray-500">USDC on Arc Network</p>
+      </div>
+
+      <div class="bg-dark-card backdrop-blur-xl border border-dark-border/50 rounded-3xl p-6 shadow-glass">
+        <h3 class="text-xl text-gray-400 mb-4">Earnings Trend</h3>
+        <canvas id="earningsChart" height="120"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent Tips -->
+  <div class="mt-10 bg-dark-card backdrop-blur-xl border border-dark-border/50 rounded-3xl p-6 shadow-glass">
+    <h3 class="text-2xl font-bold text-neon-cyan mb-4">Recent Tips</h3>
+    <div id="recentTips" class="space-y-3 overflow-y-auto max-h-64"></div>
+  </div>
+
+  <!-- Tipping Form -->
+  <div class="mt-10 bg-dark-card backdrop-blur-xl border border-dark-border/50 rounded-3xl p-6 shadow-glass max-w-3xl mx-auto">
+    <h2 class="text-3xl font-bold text-neon-cyan mb-6 text-center">Send a Tip</h2>
+    <div class="flex flex-col gap-4 mb-4">
+      <select id="creatorSelect" class="w-full p-4 bg-gray-900 border border-dark-border rounded-2xl text-white focus:outline-none focus:border-neon-cyan focus:ring-1 focus:ring-neon-cyan">
+        <option value="">Select Creator by Name</option>
+      </select>
+      <input id="creatorWalletInput" placeholder="Or enter wallet address (0x...)" class="w-full p-4 bg-gray-900 border border-dark-border rounded-2xl text-white focus:outline-none focus:border-neon-cyan focus:ring-1 focus:ring-neon-cyan"/>
+    </div>
+    <input id="amount" type="number" step="0.01" placeholder="Amount in USDC" class="w-full p-4 mb-4 bg-gray-900 border border-dark-border rounded-2xl text-white focus:outline-none focus:border-neon-cyan focus:ring-1 focus:ring-neon-cyan"/>
+    <button onclick="sendTip()" class="w-full py-4 bg-gradient-to-r from-neon-cyan to-cyan-600 rounded-2xl font-bold text-xl shadow-neon hover:scale-105 transition">Send Tip</button>
+    <div id="status" class="mt-4 text-center text-yellow-400 font-medium">Idle</div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="mt-12 text-center text-gray-400 text-sm space-y-2">
+    <p>© <span id="currentYear"></span> Arc Tip Jar</p>
+    <p>Follow me on <a href="https://x.com/RidwanUsIba" class="text-neon-cyan hover:underline" target="_blank">X</a></p>
+    <p>Contact: <a href="mailto:hello@arctip.com" class="text-neon-cyan hover:underline">hello@arctip.com</a></p>
+  </footer>
+
+</div>
+
+<script>
+const CONTRACT_ADDRESS = "0xa26E5D70180c87b36D98C21155c24709f64569E9";
+const USDC_ADDRESS = "0x3600000000000000000000000000000000000000";
+const ABI = [
+  "function tip(address creator,uint256 amount,string calldata message) external",
+  "function claimableBalance(address creator) view returns (uint256)",
+  "function creators(address creator) view returns (string memory name,string memory avatarURL,bool isActive,uint256 lifetimeEarnings)"
+];
+
+const select = document.getElementById("creatorSelect");
+let creators = [];
+
+async function connect() {
+  if(!window.ethereum){alert("MetaMask not installed!"); return;}
+  try {
+    const [account] = await ethereum.request({method:"eth_requestAccounts"});
+    document.getElementById("walletStatus").innerText = account;
+    await loadProfile(account);
+    await loadCreators();
+    await updateTotalEarned(account);
+    await updateEarningsChart(account);
+  } catch(e){console.error(e); alert("Connection failed");}
+}
+
+async function loadCreators() {
+  const provider = new ethers.BrowserProvider(window.ethereum);
+  const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider);
+  // Here you would fetch registered creators from an on-chain list if your contract supports it
+  // For demo, assume creators array is empty
+  select.innerHTML = '<option value="">Select Creator by Name</option>';
+  creators.forEach(c => {
+    const opt = document.createElement("option");
+    opt.value = c.wallet;
+    opt.text = c.name;
+    select.appendChild(opt);
+  });
+}
+
+async function loadProfile(account) {
+  const provider = new ethers.BrowserProvider(window.ethereum);
+  const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider);
+  try {
+    const c = await contract.creators(account);
+    if(c.isActive){
+      document.getElementById("profileNameDisplay").innerText = c.name;
+      document.getElementById("profileImage").src = c.avatarURL || "https://via.placeholder.com/120";
+      document.getElementById("profileBioDisplay").innerText = `Connected wallet: ${account}`;
+    }
+  } catch {}
+}
+
+function saveProfile(){
+  alert("Profile saving must be implemented on-chain in the smart contract. Currently, you must call registerAsCreator() on-chain.");
+}
+
+async function sendTip(){
+  const selectedCreator = document.getElementById("creatorSelect").value;
+  const walletInput = document.getElementById("creatorWalletInput").value.trim();
+  const amount = document.getElementById("amount").value;
+  if(!amount || (!selectedCreator && !walletInput)){alert("Select creator or enter wallet!"); return;}
+  const recipient = selectedCreator || walletInput;
+  if(!ethers.isAddress(recipient)){alert("Invalid wallet address!"); return;}
+  if(!window.ethereum){alert("MetaMask not installed!"); return;}
+  const provider = new ethers.BrowserProvider(window.ethereum);
+  const signer = await provider.getSigner();
+  const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+  const usdc = new ethers.Contract(USDC_ADDRESS, ["function approve(address spender,uint256 amount) external returns (bool)"], signer);
+  try{
+    const tipAmount = ethers.parseUnits(amount, 6);
+    await usdc.approve(CONTRACT_ADDRESS, tipAmount);
+    const tx = await contract.tip(recipient, tipAmount, "Tip from web UI");
+    document.getElementById("status").innerText="Transaction sent...";
+    await tx.wait();
+    document.getElementById("status").innerText="Tip successful!";
+    await updateTotalEarned(await signer.getAddress());
+  } catch(err){console.error(err); document.getElementById("status").innerText="Transaction failed!";}
+}
+
+async function updateTotalEarned(account){
+  const provider = new ethers.BrowserProvider(window.ethereum);
+  const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider);
+  try{
+    const bal = await contract.claimableBalance(account);
+    document.getElementById("totalEarned").innerText = (Number(ethers.formatUnits(bal,6))).toFixed(2);
+  } catch{}
+}
+
+const ctx = document.getElementById('earningsChart').getContext('2d');
+const earningsChart = new Chart(ctx,{
+  type:'line',
+  data:{labels:['Jan','Feb','Mar','Apr','May','Jun'],datasets:[{label:'Earned',data:[0,0,0,0,0,0],borderColor:'#00f5ff',backgroundColor:'rgba(0,245,255,0.15)',tension:0.4,fill:true}]},
+  options:{responsive:true,scales:{y:{beginAtZero:true,grid:{color:'rgba(255,255,255,0.08)'},ticks:{color:'#94a3b8'}},x:{grid:{display:false},ticks:{color:'#94a3b8'}}},plugins:{legend:{display:false}}}
+});
+
+async function updateEarningsChart(account){
+  // Replace with real on-chain historical data if available
+  // For demo, we simulate
+  const data = [0,5,15,10,20,30];
+  earningsChart.data.datasets[0].data = data;
+  earningsChart.update();
+}
+
+// Footer year
+document.getElementById("currentYear").innerText = new Date().getFullYear();
+</script>
+</body>
+</html>
